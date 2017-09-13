@@ -7,5 +7,7 @@ The 'Notebook_RandomForest' is a short version of my master thesis, where I used
 
 The Word document called 'unbalanced_random_forest' is a brief overview of my thesis.
 
+Both are based on the so-called comecs data which can be found as a Rda file: comecs_data.Rda
+
 All those examples can also be found on my linkedin page:
   www.linkedin.com/in/annasofiakircher
