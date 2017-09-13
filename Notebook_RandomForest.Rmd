@@ -1,0 +1,341 @@
+---
+title: "Random Forest for Unbalanced Multiple Class Classification"
+output: html_notebook
+---
+
+```{r, results = 'hide'}
+require(randomForest)
+require(ggplot2)
+require(reshape2) #melt fct
+require(gridExtra) #grid arrange
+require(RColorBrewer) #extend brewer palettes
+require(colorRamps) #extend brewer palettes
+require(colorspace) #hcl
+```
+
+## Introduction
+Random Forest is a very powerful tool not only for classification but also regression. This notebook - a short version of my master thesis - will explain the imbalance problem and how to overcome it when working with Random Forest.
+
+## The Imbalance Problem
+
+The imbalance problem occurs when the total number of a class of a data set is different from the total number of other classes. 
+Most machine learning algorithms work best when the numbers of observations of each class are roughly equal. When the number of observations of one class exceeds the other problems arise.
+Imagine for example a binary classification problem with 999 observations of class *positive* and 1 observation of class *negative*. An algorithm would then probably assign all observations to class *positive* and the overall error rate would only be 0.001. So only 1% will be misclassified. Looking at the class error rate so the misclassification rate for each class individually the bigger class (*positive*) has a class error rate of 0% while the smaller class has an error rate of 100%. So it seems that the smaller class is somehow underrepresented within the algorithm and the class error rates are not represented in the overall error rate.
+
+So the great difficulties when dealing with unbalanced data are mainly that the forest will focus more on one group (the larger one) while the other group (the smaller one) will be neglected and that the overall error rate is not representative any longer. 
+
+There are many different ways to deal with the imbalance problem. It may be noted that balancing is not always meaningful since the prior probabilities are changed when the data is balanced. One way (amongst multiple others) to deal with unbalanced data is to use resampling methods. For each group the observations are resampled to build new groups of equal size. 
+
+Three different sampling methods are evaluated and compared based on the so-called *comecs* data set.
+
+## The *Comecs* Data
+The *comecs* data set contains spectral measurements from ten different meteorites. Several corns from each meteorite are placed on four gold plates which represent the so-called targets. Each gold target contains multiple corns from two or more meteorites. (No target contains corns from all meteorites.) The targets with the corns are then used for time-of-flight secondary ion mass spectrometry measurements. Since gold as element is quite distinctive in its spectral composition, it should be easily distinguishable from the corns. Therefore, there is an eleventh class called substrate which represents the gold targets. The spectral measurements were taken along rectangular grids or along a line. 729 spectra from 11 classes/groups (10 meteorite classes and the substrate class) were measured. In the analysis and the classification only inorganic mass bins are considered. Due to chemical reasons, 297 spectra were considered as possible feature variables for the classification. 
+
+The data set is highly unbalanced, since none of the 11 classes are of equal size. There are 1035 observations in total, which seems quite few for 297 variables. The eleven classes are of different sizes, the smallest (tieschitz) has 27 observations, the largest class (substrate) has 240 observations and the largest meteoriteclass (allende) has 170 observations.
+
+```{r}
+load('comecs_data.Rda')
+table(comecs$names)
+```
+
+### Training and Test Data Set
+To evaluate the different balancing methods the data set is divided randomly into a training and a test data set. Due to the specific structure of the data the sets are constructed based on the corns. Multiple corns of each meteorite class are placed on the gold targets. It can be assumed that the spectra of the observations within one corn are very similar, hence the classification of only one corn is considered to work quite well. The more blurry task is to determine whether two corns of one class differ much from another. Do they transport the same information so that the classifier will more likely assign them to the same class? To figure that out one has to make sure that the observations in the training data set belong to corns, whose data points are not in the test data set. The separation into training and test data sets is done based on the corns rather than on the individual data points. The training and test sets are therefore separated such that some corns from the same class are considered as training corns and the remaining corns of that class are considered as test corns. This method though adds another case of imbalance. Since there are different numbers of corns for each class and the corns are of different size the imbalance of the data might become more confusing. Nevertheless the training data sets can then also be balanced to do a classification with a Random Forest.
+
+```{r}
+#train and test set
+sets <- function(selected_data) {
+  
+  rowid <- seq_len(nrow(selected_data))
+  ind <- tapply(rowid, selected_data$names,
+                function(i){
+                  sample(i, size = 0.65*length(i))
+                })
+  ind <- unlist(ind)
+  
+  train_set <- selected_data[ind,]
+  test_set <- selected_data[-ind,]
+  
+  return(list(train = train_set,
+              test = test_set))
+} # end fct sets
+```
+
+## Unbalanced Data
+One difficulty when using Random Forest is that the performance declines especially in case of a multiple-class classification if the data is unbalanced. The more unbalanced the multiple classes are the more effect can be seen in the evaluation. As mentioned before the comecs data set is highly unbalanced.
+
+The following balancing methods were investigated, analyzed and their effects are discussed later on.
+* oversampling
+* undersampling
+* same-size sampling (ntp)
+
+If balancing methods are applied it is very important to split the data into a training and test data set before balancing methods are applied. Otherwise one cannot assure the independence of the training and test data sets! Using balancing methods and Random Forest will result in extremely good out-of-bag error rates. Those, however, are no longer that representative since in most cases the out-of-bag data are no longer distinguishable from the in-of-bag data.
+
+```{r}
+# balancing methods
+sets_balance <- function(data, sampling='non', perc=1/11, class) {
+ # unbalanced
+  if (sampling == 'non'){
+    balanced <- data
+  }
+ # balancing
+  else {
+    N <- nrow(data)
+    rowid <- seq_len(N) 
+    class_tab <- table(data[,class])
+    
+  # same size sampling (ntp)  
+    if(sampling == 'ntp'){
+      size <- round(perc*N,0)
+    }
+  # oversampling
+    else if(sampling == 'over'){
+      size <- max(class_tab)
+    }
+  # undersampling
+    else if(sampling == 'under'){
+      size <- min(class_tab)
+    }
+    ind <- tapply(rowid, data[,class],
+                  function(i){
+                    sample(i, size = size, replace=TRUE)
+                  })
+    ind <- unlist(ind)
+    balanced <- data[ind,]
+  }
+  return(balanced)
+} # end fct sets_balance
+```
+
+
+### Oversampling
+In the case of oversampling each class will afterwards have the same size, so the same number of observations as the biggest class of the data set has. So basically each class will be blown up by sampling with replacement to the size of the biggest class. For the comecs data set this means that every class will have $240$ observations (the class substrate contains this many observations), which are sampled with replacement.
+
+```{r}
+over <- sets_balance(data=comecs, sampling='over', perc=1/11, class='names')
+table(over$names)
+```
+
+
+### Undersampling
+In case of undersampling each class will afterwards have the same size, so the same number of observations as the smallest class of the data set has. Each class will be sampled down to the size of the smallest class. For the comecs data set this means that every class will have $27$ observations (the class tieschitz contains $27$ observations). 
+
+```{r}
+under <- sets_balance(data=comecs, sampling='under', perc=1/11, class='names')
+table(under$names)
+```
+
+### Same-Size Sampling
+The so called ntp-method ($n$ times percentage) makes sure that the overall size of the dataset will stay the same and each class will be blown up or sampled down to the same proportion of the overall size. So if there are eleven classes, each class will afterwards have the size of $1/11$ times the overall number of observations ($n$). So each class will have the same size and the overall number of observations will still be the same as if no balancing was done. For the comecs data set this means that every class is blown up or sampled down to a size of $\frac{1035}{11} \approx 94$ observations. Only two classes have to be undersampled, namely allende and substrate. All other classes (lance, mocs, murchison, ochanks, pultusk, renazzo, tieschitz and tissint) have to be oversampled except the meteorite class tamdakht, which has exactly $94$ observations and won't be changed.
+
+```{r}
+ntp <- sets_balance(data=comecs, sampling='ntp', perc=1/11, class='names')
+table(ntp$names)
+```
+
+## Evaluation
+Evaluations are carried out by rates based on the confusion table, such as:
+
+* out-of-bag estimated error rate [oob]
+* class error rates [cer]
+* misclassification rate [mcr]
+* predictive ability [aby]
+
+The first two ([oob] and [cer]) are calculated based on the training data. The misclassification rate [mcr] and the predictive ability [aby] are calculated using the test data. 
+The out-of-bag estimated error rate is the misclassification rate of a forest using the OOB data for each tree as individual internal test data. The OOB error rate is an unbiased estimate of the overall error of the forest.
+Although a separated test set wouldn't be necessary since the out-of-bag estimate is as accurate as using a test set of the same size as the training set, an independent test set is nevertheless used to calculate the misclassification rate to see how applying a balancing method effects the classification using Random Forest.
+The other rate which is calculated using the test set is the so-called predictive ability. It represents the proportion of each individual class which is classified correctly by the trained forest. It is directly reverse to the proportion of each class which is classified incorrectly.
+
+All Random Forests will contain of 600 trees (each based on a different bootstrap sample) and 58 out of 297 variables are available at each node. Those numbers were carefully determined via a repeated simulation.
+
+```{r}
+# Splitting the data into training and test data set.
+train_test <- sets(comecs)
+
+# Balance the data
+# Note that the test data set is not balanced. This would contaminate the results.
+train <- sets_balance(data=train_test$train, sampling='non', perc=1/11, class='names')
+test <- sets_balance(data=train_test$test, sampling='non', perc=1/11, class='names')
+
+# Run a Random Forest on the (balanced) training data set (with 600 trees and 58 variables available at each node)
+rf_train <- randomForest(names ~. , data=train, ntree=600, mtry=58, importance=TRUE)
+# Evaluate the trained forest based on the independent test data set.
+rf_test <- table(test$names, predict(rf_train, test))
+```
+
+```{r}
+# Four different error rates will be calculated, two based on the training data (oob and cer) and two based on the test data (mcr and aby).
+
+# oob ... unbiased estimate of the overall error rate based on the out-of-bag data
+oob_non <- rf_train$err.rate[600,'OOB']
+
+# cer ... class error rate, proportion of misclassified observations within one class 
+cer_non <- rf_train$confusion[,'class.error']
+
+# mcr ... misclassification rate based on the test data
+mcr_non <- 1-sum(diag(rf_test))/sum(rf_test)
+
+# aby ... predictive ability, proportion of correctly classified observations within one class
+aby_non <- matrix(nrow=1, ncol=11)
+grp_names <- levels(comecs$names)
+colnames(aby_non) <- grp_names
+for (i in grp_names) { aby_non[1,i] <- rf_test[i,i]/sum(rf_test[i,]) }
+
+oob_non
+cer_non
+mcr_non
+aby_non
+```
+
+The overall error rate (oob) for the trined forest is quite good regarding the difficult structure of the data. The misclassification rate (mcr, based on the test data) is even lower. But looking at the class error rates and the predictive abilities one can see that the good performance is not reflected in all classes. There are classes that have a much higher percentage of correclty classified observations than other classes. This is one of the main issues when dealing with unbalanced data, the overall error rate does not represent the class error rates.
+
+Applying balancing mehtods should improve this representation a little bit.
+
+Therefore, training the forest and then applying it to the test data set is repeated for the three different balancing methods.
+
+```{r, include=FALSE}
+oob <- matrix(nrow=4, ncol=1)
+cer <- matrix(nrow=4, ncol=11)
+mcr <- matrix(nrow=4, ncol=1)
+aby <- matrix(nrow=4, ncol=11)
+
+grp_names <- levels(comecs$names)
+colnames(cer) <- grp_names
+colnames(aby) <- grp_names
+
+#misclassification rate
+mcr[1,] <- mcr_non
+#out-of-bag error rate    
+oob[1,] <- oob_non
+#class error rates    
+cer[1,] <- cer_non
+#predictive abilities    
+aby[1,] <- aby_non
+```
+
+```{r}
+# same-size sampling
+train_ntp <- sets_balance(data=train_test$train, sampling='ntp', perc=1/11, class='names')
+    
+rf_train_ntp <- randomForest(names ~. , data=train_ntp, ntree=600, mtry=58, importance=TRUE)
+rf_test_ntp <- table(test$names, predict(rf_train_ntp, test))
+
+# oversampling
+train_over <- sets_balance(data=train_test$train, sampling='over', perc=1/11, class='names')
+
+rf_train_over <- randomForest(names ~. , data=train_over, ntree=600, mtry=58, importance=TRUE)
+rf_test_over <- table(test$names, predict(rf_train_over, test))
+
+# undersampling
+train_under <- sets_balance(data=train_test$train, sampling='under', perc=1/11, class='names')
+
+rf_train_under <- randomForest(names ~. , data=train_under, ntree=600, mtry=58, importance=TRUE)
+rf_test_under <- table(test$names, predict(rf_train_under, test))
+```
+
+```{r, include=FALSE}
+# same-size sampling
+oob[2,] <- rf_train_ntp$err.rate[600,'OOB']
+cer[2,] <- c(rf_train_ntp$confusion[,'class.error'])
+mcr[2,] <- 1-sum(diag(rf_test_ntp))/sum(rf_test_ntp)
+for (i in grp_names) { aby[2,i] <- rf_test_ntp[i,i]/sum(rf_test_ntp[i,]) }
+#vip[2,] <- c(order(rf_train_ntp$importance[,'MeanDecreaseAccuracy'], decreasing=TRUE)[1])
+
+# oversampling
+oob[3,] <- rf_train_over$err.rate[600,'OOB']
+cer[3,] <- c(rf_train_over$confusion[,'class.error'])
+mcr[3,] <- 1-sum(diag(rf_test_over))/sum(rf_test_over)
+for (i in grp_names) { aby[3,i] <- rf_test_over[i,i]/sum(rf_test_over[i,]) }
+#vip[3,] <- c(order(rf_train_over$importance[,'MeanDecreaseAccuracy'], decreasing=TRUE)[1])
+
+# undersampling
+oob[4,] <- rf_train_under$err.rate[600,'OOB']
+cer[4,] <- c(rf_train_under$confusion[,'class.error'])
+mcr[4,] <- 1-sum(diag(rf_test_under))/sum(rf_test_under)
+for (i in grp_names) { aby[4,i] <- rf_test_under[i,i]/sum(rf_test_under[i,]) }
+#vip[4,] <- c(order(rf_train_under$importance[,'MeanDecreaseAccuracy'], decreasing=TRUE)[1])
+
+# Now all error rates are carried out into a data frame to make comparing them a little easier.
+balancing <- c('non', 'ntp', 'over', 'under')
+oob_df <- data.frame(oob, balancing)
+cer_df <- data.frame(cer, balancing)
+mcr_df <- data.frame(mcr, balancing)
+aby_df <- data.frame(aby, balancing)
+cer_new <- melt(cer_df, id.vars=c('balancing'), variable.name='names', value.name='cer')
+aby_new <- melt(aby_df, id.vars=c('balancing'), variable.name='names', value.name='aby')
+```
+
+
+
+```{r, include=FALSE}
+#Now all error rates are carried out as data frames to make comparing them a little easier.
+oob_df
+cer_df
+mcr_df
+aby_df
+```
+
+```{r, include=FALSE}
+mypalette <- rainbow_hcl(11, c=100, l=65)
+```
+
+## Results
+Now let's take a look at the effect of balancing based on the error rates.
+
+```{r, echo=FALSE}
+# mcr
+print(ggplot(mcr_df, aes(x=1, y=mcr, colour=balancing, fill=balancing)) + 
+        ggtitle('Misclassificationrate') +
+        geom_bar(stat='identity', width=0.55) + 
+        facet_grid(.~balancing) + ylim(0,1) + 
+        theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.title.x=element_blank(), legend.position='bottom') + 
+        guides(fill=FALSE, colour=FALSE))
+# oob
+print(ggplot(oob_df, aes(x=1, y=oob, colour=balancing, fill=balancing)) + 
+        ggtitle('OOB Error Rate') +
+        geom_bar(stat='identity', width=0.55) + 
+        facet_grid(.~balancing) + ylim(0,1) + 
+        theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.title.x=element_blank(), legend.position='bottom') + 
+        guides(fill=FALSE, colour=FALSE)) 
+# cer
+print(ggplot(cer_new, aes(x=names, y=cer, colour=names, fill=names)) + 
+        geom_bar(stat = 'identity', width=0.55) + facet_wrap(~balancing) + ylim(0,1) +
+        scale_fill_manual(values = mypalette) + 
+        scale_color_manual(values = mypalette) + 
+        theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.title.x=element_blank(), legend.position='bottom') + 
+        ggtitle('Class Error Rates') +
+        guides(fill=guide_legend(title=NULL, nrow=2, byrow=TRUE), colour=guide_legend(title=NULL)))
+# aby
+print(ggplot(aby_new, aes(x=names, y=aby, colour=names, fill=names)) + 
+        geom_bar(stat = 'identity', width=0.55) + facet_wrap(~balancing) + ylim(0,1) +
+        scale_fill_manual(values = mypalette) + 
+        scale_color_manual(values = mypalette) + 
+        theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.title.x=element_blank(), legend.position='bottom') + 
+        ggtitle('Predictive Ability') +
+        guides(fill=guide_legend(title=NULL, nrow=2, byrow=TRUE), colour=guide_legend(title=NULL)))
+
+```
+
+Applying oversampling improves the performance based on the overall error rate (oob error rate). Because the numbers of observations are artificially increased by sampling (from the classes) with replacement the observations that were already classified correctly are almost surely again correctly classified and therefore, the error rate will decrease. The effects of applying same-size sampling (ntp) on the performance of the forest are considered to be quite similar to those of applying oversampling, since more classes have to be blown up and only a few have to be down sized.
+
+So oversampling and same-size sampling cause a decrease of the overall error rate. Undersampling, however, leads to an increase. Since all classes, except the smallest one, have to be down sized one risks the loss of important information, hence the bad performance.
+
+Regarding the class error rates (cer), it's conspicuous how balancing effects those especially when applying oversampling and same-size sampling (ntp). The class error rates are more evenly distributed and are related to the overall error rate (oob), so they reflect the overall error rate as well as the overall error rate reflects them, which is a very desirable characteristic when it comes to multiple-class classification. Undersampling performs not that well. The extremely good performance of oversampling, however, has to be observed with caution. 
+Be aware that oversampling in this case means that every class has now $240$ observations (the class *substrate* contains $240$ observations). This is almost ten times as many data points as the smallest class contains (the meteorite-class *tieschitz* contains $27$ observations). This might increase the danger of overfitting, or it might not be appropriate at all for some cases, because one changes the prior probabilities of certain classes, which may not be wanted.
+
+Regarding the misclassification rate (mcr), which is based on the test data set, it is interesting to see that the affects of balancing are not that drastic, not that obvious compared to those on the training data. Applying oversampling or same-size sampling (ntp) the misclassification rate stays more or less the same. Only applying undersampling seems to cause an increase, which relates to the effects on the overall error rate and the class error rate based on the training data set. So looking at the misclassification rate balancing the data at least doesn't worsen the situation.
+
+Regarding the test data, the results of the evaluation in terms of the class-wise predictive abilities don't change that much in comparison to the unbalanced case as one can obtain from the plots above. The rates are still uneven but at least better when oversampling or same-size sampling (ntp) is applied. Also the order of the classes in regarding their performance doesn't change. However, it did change in terms of the class error rates (training data). The worst class is now a different one than it was for the unbalanced case.
+
+Although at first glance these effects may not be good, comparing the misclassification rates and the predictive abilities it shows that the misclassification rate in each case relates to the predictive abilities, which is very important, since the misclassification rate should represent the class error rates.
+
+So it seems that oversampling and in this case also same-size sampling might lead to overfitting, but overall spoken it improves the performance of the classification itself and improves it for the test data set although these effects are not that obvious as for the training data set. Undersampling, however, performs very poorly.
+
+## Conclusion
+Regarding the *comecs* data set it can be concluded that oversampling leads to the best results with respect to the training data as well as to the test data. The class error rates of the training data are much lower and also the predictive abilities for the independent test data improve. This holds for almost every version of classification that has been done. The main problem of imbalance, being that the class error rates are so to say also unbalanced and not reflected in the overall error rate, can be overcome very effectively by oversampling and also same-size sampling. Same-size sampling is almost as good as oversampling sometimes even better in terms of the effects of balancing. This and the tendency of oversampling to cause overfitting lead to the conclusion that same-size sampling may be the most appropriate balancing method for this classification problem. Also, it takes less computing time than oversampling.
+
+Dealing with unbalanced multiple-class classification in general is a hard task. The purpose of the classification, the importance of the multiple classes and the effects of different balancing methods are different for every data set. Balancing methods that are based on a method of random subsampling seem to be more reasonable for multiple-class problems than cost-sensitive learning, which seems to be more suitable for binary classifications.
+
+
+
+
+
