@@ -4,7 +4,7 @@ www.linkedin.com/in/annasofiakircher
 In this github repository you can find some examples of my work which show some of my skills.
 
 # Random Forest
-The 'Notebook_RandomForest.html' is a short version of my master thesis, where I used sampling methods to overcome the imbalance problem using Random Forests for a multiple class classification.
+The 'Notebook_RandomForest' is a short version of my master thesis, where I used sampling methods to overcome the imbalance problem using Random Forests for a multiple class classification.
 
 The Word document called 'unbalanced_random_forest.docx' is a brief overview of my thesis.
 
@@ -24,7 +24,7 @@ As my preferred programming language i used R for the analysis.
 
 
 # SAT Scores - NYC
-Based on demografic and other information about high schools in New York City, I've done some analysis on SAT scores. In the notebook 'SATscores_NYC.html' every step of analysis and conclusions can be retraced. 
+Based on demografic and other information about high schools in New York City, I've done some analysis on SAT scores. In the notebook 'SATscores_NYC' every step of analysis and conclusions can be retraced. 
 
 A short version can be found in the Word document called 'SATscores_NYC.docx'.
 
