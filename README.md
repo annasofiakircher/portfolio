@@ -55,4 +55,4 @@ During the analysis followin questions are investigated:
 All data sets can be found in this repository.
 
 # R & Python
-As my preferred programming language I used R for almost all projects. The energy demand model analysis was done with python.
+As my preferred programming language I used R for almost all projects. The energy demand model analysis were analyzed and built in Python.
