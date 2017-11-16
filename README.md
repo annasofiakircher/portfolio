@@ -44,7 +44,7 @@ During the analysis followin questions are investigated:
 * Are the SAT fair? Concerning the allegations about the SAT being unfair to certain racial groups or biased by gender?
 
 ## Data
-All data sets can be found oin this repository.
+All data sets can be found in this repository.
 
-# R
-As my preferred programming language I used R for the analysis.
+# R & Python
+As my preferred programming language I used R for almost all projects. The energy demand model analysis was done with python.
