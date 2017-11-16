@@ -6,6 +6,7 @@ In this github repository you can find some examples of my work which show some 
 # Projects
 * Quality Machine
 * Unbalanced Random Forest
+* Energy Demand Model
 * SAT Scores in NYC
 
 # Quality Machine
@@ -28,6 +29,13 @@ After a colleague of mine did some kNN clustering on the spectral compositions o
 
 ## Data and Installation
 My analysis is based on the so-called comecs data set which can be found in this repository. The code junks in the notebook are small samples of what I did in my thesis. So you can run the code without overloading your computer.
+
+# Energy Demand Model
+Time series regarding electricity consumption, prices and GDP are used to try to fit a demand model to investigate the electricty consumption for Finland and Norway.
+Four different models are fitted to the data and compared such that one final model could be chosen.
+
+## Data
+The timeseries start in 1978 and end in 2008. All data sets can be downloaded form this repository.
 
 # SAT Scores - NYC
 Based on demografic and other information about high schools in New York City, I've done some analysis on SAT scores. In the notebook 'SATscores_NYC' every step of analysis and conclusions can be retraced. 
