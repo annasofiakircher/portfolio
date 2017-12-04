@@ -31,7 +31,7 @@ After a colleague of mine did some kNN clustering on the spectral compositions o
 My analysis is based on the so-called comecs data set which can be found in this repository. The code junks in the notebook are small samples of what I did in my thesis. So you can run the code without overloading your computer.
 
 # Energy Demand Model
-Time series regarding electricity consumption, prices and GDP are used to try to fit a demand model to investigate the electricty consumption for Finland and Norway.
+Time series regarding electricity consumption, prices and GDP are used to try to fit a demand model to investigate the electricity consumption for Finland and Norway.
 Four different models are fitted to the data and compared such that one final model could be chosen.
 
 ## Data
