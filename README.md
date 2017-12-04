@@ -22,7 +22,7 @@ The Word document called 'unbalanced_random_forest.docx' is a brief overview of 
 Both are based on the so-called comecs data which can be found as a Rda file: comecs_data.Rda
 
 ## What is analyzed?
-The spectral measurements of ten meteorites are investigated to determine wether or not the spectral composition of different meteorites allows a distinctive classification of the meteorites.
+The spectral measurements of ten meteorites are investigated to determine whether or not the spectral composition of different meteorites allows a distinctive classification of the meteorites.
 
 ## Motivation
 After a colleague of mine did some kNN clustering on the spectral compositions of meteorites, we were interested how Random Forest would perform. Especially regarding the variable importance, which was a great feature for this analysis.
